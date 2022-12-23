@@ -45,7 +45,11 @@ const reviewSchema = {
   rate: {
     in: ["body"],
     isInt: {
-      errorMessage: "Rate is required and must be a number",
+      errorMessage: "Rate is required and must be a number between 0 and 5",
+      options: {
+        min: 0,
+        max: 5,
+      },
     },
   },
   productId: {
