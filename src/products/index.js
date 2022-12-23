@@ -73,7 +73,7 @@ productsRouter.put(
       const oldProductIndex = productsArray.findIndex(
         (product) => product.id === productID
       );
-      if (oldProductIndex) {
+      if (oldProductIndex !== -1) {
         const oldProduct = productsArray[oldProductIndex];
         const updatedProduct = {
           ...oldProduct,
