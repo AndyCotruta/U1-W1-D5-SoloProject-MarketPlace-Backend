@@ -1,4 +1,4 @@
-import express from "express";
+import express, { request } from "express";
 import {
   getProducts,
   getReviews,
@@ -72,8 +72,17 @@ productsRouter.post(
 // 2. GET all products
 productsRouter.get("/", async (req, res, next) => {
   try {
+    const query = req.query.category;
+    console.log(query);
     const productsArray = await getProductsWithReviews();
-    res.send(productsArray);
+    if (!query) {
+      res.send(productsArray);
+    } else {
+      const searchedProducts = productsArray.filter(
+        (product) => product.category === query
+      );
+      res.send(searchedProducts);
+    }
   } catch (error) {
     console.log(error);
   }
@@ -161,7 +170,9 @@ productsRouter.post(
         };
         reviewsArray.push(newReview);
         await writeReviews(reviewsArray);
-        res.send(`Review with id ${newReview._id} was created successfully`);
+        res
+          .status(201)
+          .send(`Review with id ${newReview._id} was created successfully`);
       } else {
         next(NotFound(`Product with id ${req.body.productId} was not found`));
       }
@@ -171,41 +182,107 @@ productsRouter.post(
   }
 );
 
-// 7. UPDATE review
-// productsRouter.post(
-//   "/:id/reviews",
-//   checksReviewSchema,
-//   triggerReviewBadRequest,
-//   async (req, res, next) => {
-//     try {
-//       const productID = req.params.id;
-//       const productsArray = await getProducts();
-//       const reviewsArray = await getReviews();
-//       const oldProductIndex = productsArray.findIndex(
-//         (product) => product.id === productID
-//       );
-//       if (oldProductIndex !== -1) {
-//         const oldProduct = productsArray[oldProductIndex];
-//         const updatedProduct = {
-//           ...oldProduct,
-//           reviews: { ...req.body, _id: uniqid(), createdAt: new Date() },
-//         };
-//         productsArray[oldProductIndex] = updatedProduct;
-//         await writeProducts(productsArray);
-//         const newReview = {
-//           ...req.body,
-//           _id: uniqid(),
-//           createdAt: new Date(),
-//         };
-//         reviewsArray.push(newReview);
-//         await writeReviews(reviewsArray);
-//         res.send(updatedProduct);
-//       } else {
-//         next(NotFound(`Product with id ${productID} could not be found`));
-//       }
-//     } catch (error) {
-//       console.log(error);
-//     }
-//   }
-// );
+// 7. GET all reviews of a product
+productsRouter.get("/:id/reviews", async (req, res, next) => {
+  try {
+    const productID = req.params.id;
+    const reviewsArray = await getReviews();
+    const targetReviews = reviewsArray.filter(
+      (review) => review.productId === productID
+    );
+    res.send(targetReviews);
+  } catch (error) {
+    console.log(error);
+  }
+});
+
+// 8. GET a specific review for a product
+productsRouter.get("/:productId/reviews/:reviewId", async (req, res, next) => {
+  try {
+    const productID = req.params.productId;
+    const reviewID = req.params.reviewId;
+    const reviewsArray = await getReviews();
+    const targetReview = reviewsArray
+      .filter((review) => review.productId === productID)
+      .find((review) => review._id === reviewID);
+    if (targetReview) {
+      res.send(targetReview);
+    } else {
+      next(
+        NotFound(
+          `Request could not be performed because of incorrect reviewId or productId`
+        )
+      );
+    }
+  } catch (error) {
+    console.log(error);
+  }
+});
+
+// 9. UPDATE a specific review for a product
+productsRouter.put(
+  "/:productId/reviews/:reviewId",
+  checksReviewSchema,
+  triggerReviewBadRequest,
+  async (req, res, next) => {
+    try {
+      const productID = req.params.productId;
+      const reviewID = req.params.reviewId;
+      const reviewsArray = await getReviews();
+      const indexOfTargetReview = reviewsArray
+        .filter((review) => review.productId === productID)
+        .findIndex((review) => review._id === reviewID);
+      if (indexOfTargetReview !== -1) {
+        const targetReview = reviewsArray[indexOfTargetReview];
+        const updatedTargetReview = {
+          ...targetReview,
+          ...req.body,
+          updatedAt: new Date(),
+        };
+        reviewsArray[indexOfTargetReview] = updatedTargetReview;
+        await writeReviews(reviewsArray);
+        res.send(updatedTargetReview);
+      } else {
+        next(
+          NotFound(
+            `Request could not be performed because of incorrect reviewId or productId`
+          )
+        );
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+);
+
+// 10. DELETE a specific review for a product
+productsRouter.delete(
+  "/:productId/reviews/:reviewId",
+  async function (req, res, next) {
+    try {
+      const productID = req.params.productId;
+      const reviewID = req.params.reviewId;
+      const reviewsArray = await getReviews();
+      const filteredReviewsArray = reviewsArray
+        .filter((review) => review.productId === productID)
+        .filter((review) => review._id !== reviewID);
+      if (
+        filteredReviewsArray.length !==
+        reviewsArray.filter((review) => review.productId === productID).length
+      ) {
+        await writeReviews(filteredReviewsArray);
+        res.status(204).send();
+      } else {
+        next(
+          NotFound(
+            `Request could not be performed because of incorrect reviewId or productId`
+          )
+        );
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+);
+
 export default productsRouter;
