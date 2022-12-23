@@ -1,12 +1,48 @@
 import express from "express";
-import { getProducts, writeProducts } from "../lib/fs-tools.js";
-import { checksProductSchema, triggerBadRequest } from "./validators.js";
+import {
+  getProducts,
+  getReviews,
+  writeProducts,
+  writeReviews,
+} from "../lib/fs-tools.js";
+import {
+  checksProductSchema,
+  checksReviewSchema,
+  triggerBadRequest,
+  triggerReviewBadRequest,
+} from "./validators.js";
 import uniqid from "uniqid";
 import httpErrors from "http-errors";
 
 const productsRouter = express.Router();
 
 const { NotFound } = httpErrors;
+
+const getProductsWithReviews = async () => {
+  const productsArray = await getProducts();
+  const reviews = await getReviews();
+  const productsWithReviews = productsArray.map((product) => {
+    const targetReview = reviews.filter(
+      (review) => review.productId === product.id
+    );
+    if (targetReview) {
+      product.reviews = targetReview;
+    }
+    return product;
+  });
+  return productsWithReviews;
+};
+
+const getProductWithReviews = async (id) => {
+  const productsArray = await getProducts();
+  const searchedProduct = productsArray.find((product) => product.id === id);
+  const reviews = await getReviews();
+  const targetReview = reviews.filter((review) => review.productId === id);
+  if (targetReview) {
+    searchedProduct.reviews = targetReview;
+  }
+  return searchedProduct;
+};
 
 //..................................CRUD OPERATIONS..................................
 
@@ -36,7 +72,7 @@ productsRouter.post(
 // 2. GET all products
 productsRouter.get("/", async (req, res, next) => {
   try {
-    const productsArray = await getProducts();
+    const productsArray = await getProductsWithReviews();
     res.send(productsArray);
   } catch (error) {
     console.log(error);
@@ -47,10 +83,8 @@ productsRouter.get("/", async (req, res, next) => {
 productsRouter.get("/:id", async (req, res, next) => {
   try {
     const productID = req.params.id;
-    const productsArray = await getProducts();
-    const searchedProduct = productsArray.find(
-      (product) => product.id === productID
-    );
+    const searchedProduct = await getProductWithReviews(productID);
+
     if (searchedProduct) {
       res.send(searchedProduct);
     } else {
@@ -110,4 +144,68 @@ productsRouter.delete("/:id", async (req, res, next) => {
     console.log(error);
   }
 });
+
+// 6. ADD product REVIEWS
+productsRouter.post(
+  "/:id/reviews",
+  checksReviewSchema,
+  triggerReviewBadRequest,
+  async (req, res, next) => {
+    try {
+      const reviewsArray = await getReviews();
+      if (req.body.productId === req.params.id) {
+        const newReview = {
+          ...req.body,
+          _id: uniqid(),
+          createdAt: new Date(),
+        };
+        reviewsArray.push(newReview);
+        await writeReviews(reviewsArray);
+        res.send(`Review with id ${newReview._id} was created successfully`);
+      } else {
+        next(NotFound(`Product with id ${req.body.productId} was not found`));
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+);
+
+// 7. UPDATE review
+// productsRouter.post(
+//   "/:id/reviews",
+//   checksReviewSchema,
+//   triggerReviewBadRequest,
+//   async (req, res, next) => {
+//     try {
+//       const productID = req.params.id;
+//       const productsArray = await getProducts();
+//       const reviewsArray = await getReviews();
+//       const oldProductIndex = productsArray.findIndex(
+//         (product) => product.id === productID
+//       );
+//       if (oldProductIndex !== -1) {
+//         const oldProduct = productsArray[oldProductIndex];
+//         const updatedProduct = {
+//           ...oldProduct,
+//           reviews: { ...req.body, _id: uniqid(), createdAt: new Date() },
+//         };
+//         productsArray[oldProductIndex] = updatedProduct;
+//         await writeProducts(productsArray);
+//         const newReview = {
+//           ...req.body,
+//           _id: uniqid(),
+//           createdAt: new Date(),
+//         };
+//         reviewsArray.push(newReview);
+//         await writeReviews(reviewsArray);
+//         res.send(updatedProduct);
+//       } else {
+//         next(NotFound(`Product with id ${productID} could not be found`));
+//       }
+//     } catch (error) {
+//       console.log(error);
+//     }
+//   }
+// );
 export default productsRouter;
