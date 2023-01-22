@@ -11,6 +11,7 @@ import filesRouter from "./files/index.js";
 import { publicFolderPath } from "./lib/fs-tools.js";
 import productsRouter from "./products/index.js";
 import createHttpError from "http-errors";
+import mongoose from "mongoose";
 
 const port = process.env.PORT;
 const server = express();
@@ -45,7 +46,12 @@ server.use(notFoundHandler);
 server.use(genericErrorHandler);
 server.use(unauthorizedHandler);
 
-server.listen(port, () => {
-  console.table(listEndpoints(server));
-  console.log("Server listening on port:", port);
+mongoose.connect(process.env.MONGODB_URL);
+
+mongoose.connection.on("connected", () => {
+  console.log("Connection established to Mongo");
+  server.listen(port, () => {
+    console.table(listEndpoints(server));
+    console.log("Server listening on port:", port);
+  });
 });

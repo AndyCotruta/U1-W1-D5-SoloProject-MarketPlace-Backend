@@ -13,6 +13,7 @@ import {
 } from "./validators.js";
 import uniqid from "uniqid";
 import httpErrors from "http-errors";
+import ProductModel from "./model.js";
 
 const productsRouter = express.Router();
 
@@ -47,34 +48,23 @@ const getProductWithReviews = async (id) => {
 //..................................CRUD OPERATIONS..................................
 
 // 1. CREATE a new product
-productsRouter.post(
-  "/",
-  checksProductSchema,
-  triggerBadRequest,
-  async (req, res, next) => {
-    try {
-      const productsArray = await getProducts();
-      const newProduct = {
-        ...req.body,
-        id: uniqid(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      productsArray.push(newProduct);
-      await writeProducts(productsArray);
-      res.status(201).send(`Product with id ${newProduct.id} was created`);
-    } catch (error) {
-      console.log(error);
-    }
+productsRouter.post("/", async (req, res, next) => {
+  try {
+    const newProduct = new ProductModel(req.body);
+    const { _id } = await newProduct.save();
+    res.status(201).send(`Product with id ${_id} was created`);
+  } catch (error) {
+    console.log(error);
+    next(error);
   }
-);
+});
 
 // 2. GET all products
 productsRouter.get("/", async (req, res, next) => {
   try {
     const query = req.query.category;
     console.log(query);
-    const productsArray = await getProductsWithReviews();
+    const productsArray = await ProductModel.find();
     if (!query) {
       res.send(productsArray);
     } else {
@@ -85,6 +75,7 @@ productsRouter.get("/", async (req, res, next) => {
     }
   } catch (error) {
     console.log(error);
+    next(error);
   }
 });
 
@@ -92,7 +83,7 @@ productsRouter.get("/", async (req, res, next) => {
 productsRouter.get("/:id", async (req, res, next) => {
   try {
     const productID = req.params.id;
-    const searchedProduct = await getProductWithReviews(productID);
+    const searchedProduct = await ProductModel.findById(productID);
 
     if (searchedProduct) {
       res.send(searchedProduct);
@@ -101,6 +92,7 @@ productsRouter.get("/:id", async (req, res, next) => {
     }
   } catch (error) {
     console.log(error);
+    next(error);
   }
 });
 
@@ -112,25 +104,19 @@ productsRouter.put(
   async (req, res, next) => {
     try {
       const productID = req.params.id;
-      const productsArray = await getProducts();
-      const oldProductIndex = productsArray.findIndex(
-        (product) => product.id === productID
+      const updatedProduct = await ProductModel.findByIdAndUpdate(
+        productID,
+        req.body,
+        { new: true, runValidators: true }
       );
-      if (oldProductIndex !== -1) {
-        const oldProduct = productsArray[oldProductIndex];
-        const updatedProduct = {
-          ...oldProduct,
-          ...req.body,
-          updatedAt: new Date(),
-        };
-        productsArray[oldProductIndex] = updatedProduct;
-        await writeProducts(productsArray);
+      if (updatedProduct) {
         res.send(updatedProduct);
       } else {
         next(NotFound(`Product with id ${productID} could not be found`));
       }
     } catch (error) {
       console.log(error);
+      next(error);
     }
   }
 );
@@ -139,18 +125,15 @@ productsRouter.put(
 productsRouter.delete("/:id", async (req, res, next) => {
   try {
     const productID = req.params.id;
-    const productsArray = await getProducts();
-    const filteredArray = productsArray.filter(
-      (product) => product.id !== productID
-    );
-    if (filteredArray.length !== productsArray.length) {
-      await writeProducts(filteredArray);
+    const deletedProduct = await ProductModel.findByIdAndDelete(productID);
+    if (productID) {
       res.status(204).send();
     } else {
       next(NotFound(`Product with id ${productID} could not be found`));
     }
   } catch (error) {
     console.log(error);
+    next(error);
   }
 });
 
