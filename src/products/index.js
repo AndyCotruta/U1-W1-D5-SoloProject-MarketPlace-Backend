@@ -138,44 +138,39 @@ productsRouter.delete("/:id", async (req, res, next) => {
 });
 
 // 6. ADD product REVIEWS
-productsRouter.post(
-  "/:id/reviews",
-  checksReviewSchema,
-  triggerReviewBadRequest,
-  async (req, res, next) => {
-    try {
-      const reviewsArray = await getReviews();
-      if (req.body.productId === req.params.id) {
-        const newReview = {
-          ...req.body,
-          _id: uniqid(),
-          createdAt: new Date(),
-        };
-        reviewsArray.push(newReview);
-        await writeReviews(reviewsArray);
-        res
-          .status(201)
-          .send(`Review with id ${newReview._id} was created successfully`);
-      } else {
-        next(NotFound(`Product with id ${req.body.productId} was not found`));
-      }
-    } catch (error) {
-      console.log(error);
+productsRouter.post("/:id/reviews", async (req, res, next) => {
+  try {
+    const productId = req.params.id;
+    const newReview = req.body;
+    const updatedProduct = await ProductModel.findByIdAndUpdate(
+      productId,
+      { $push: { reviews: newReview } },
+      { new: true, runValidators: true }
+    );
+    if (updatedProduct) {
+      res.status(201).send(updatedProduct);
+    } else {
+      next(NotFound(`Product with id ${productId} was not found`));
     }
+  } catch (error) {
+    console.log(error);
+    next(error);
   }
-);
+});
 
 // 7. GET all reviews of a product
 productsRouter.get("/:id/reviews", async (req, res, next) => {
   try {
-    const productID = req.params.id;
-    const reviewsArray = await getReviews();
-    const targetReviews = reviewsArray.filter(
-      (review) => review.productId === productID
-    );
-    res.send(targetReviews);
+    const productId = req.params.id;
+    const targetProduct = await ProductModel.findById(productId);
+    if (targetProduct) {
+      res.send(targetProduct.reviews);
+    } else {
+      next(NotFound(`Product with id ${productId} was not found`));
+    }
   } catch (error) {
     console.log(error);
+    next(error);
   }
 });
 
@@ -184,59 +179,54 @@ productsRouter.get("/:productId/reviews/:reviewId", async (req, res, next) => {
   try {
     const productID = req.params.productId;
     const reviewID = req.params.reviewId;
-    const reviewsArray = await getReviews();
-    const targetReview = reviewsArray
-      .filter((review) => review.productId === productID)
-      .find((review) => review._id === reviewID);
-    if (targetReview) {
-      res.send(targetReview);
-    } else {
-      next(
-        NotFound(
-          `Request could not be performed because of incorrect reviewId or productId`
-        )
+    const targetProduct = await ProductModel.findById(productID);
+
+    if (targetProduct) {
+      const targetReview = targetProduct.reviews.find(
+        (comment) => comment._id.toString() === reviewID
       );
+      if (targetReview) {
+        res.send(targetReview);
+      } else {
+        next(NotFound(`Review with id ${reviewID} not found`));
+      }
+    } else {
+      next(NotFound(`Product with id ${productID} not found`));
     }
   } catch (error) {
     console.log(error);
+    next(error);
   }
 });
 
 // 9. UPDATE a specific review for a product
-productsRouter.put(
-  "/:productId/reviews/:reviewId",
-  checksReviewSchema,
-  triggerReviewBadRequest,
-  async (req, res, next) => {
-    try {
-      const productID = req.params.productId;
-      const reviewID = req.params.reviewId;
-      const reviewsArray = await getReviews();
-      const indexOfTargetReview = reviewsArray
-        .filter((review) => review.productId === productID)
-        .findIndex((review) => review._id === reviewID);
-      if (indexOfTargetReview !== -1) {
-        const targetReview = reviewsArray[indexOfTargetReview];
-        const updatedTargetReview = {
-          ...targetReview,
+productsRouter.put("/:productId/reviews/:reviewId", async (req, res, next) => {
+  try {
+    const productID = req.params.productId;
+    const reviewID = req.params.reviewId;
+    const targetProduct = await ProductModel.findById(productID);
+    if (targetProduct) {
+      const index = targetProduct.reviews.findIndex(
+        (review) => review._id.toString() === reviewID
+      );
+      if (index !== -1) {
+        targetProduct.reviews[index] = {
+          ...targetProduct.reviews[index].toObject(),
           ...req.body,
-          updatedAt: new Date(),
         };
-        reviewsArray[indexOfTargetReview] = updatedTargetReview;
-        await writeReviews(reviewsArray);
-        res.send(updatedTargetReview);
+        await targetProduct.save();
+        res.send(targetProduct);
       } else {
-        next(
-          NotFound(
-            `Request could not be performed because of incorrect reviewId or productId`
-          )
-        );
+        next(NotFound(`Review with id ${reviewID} was not found`));
       }
-    } catch (error) {
-      console.log(error);
+    } else {
+      next(NotFound(`Product with id ${productID} was not found`));
     }
+  } catch (error) {
+    console.log(error);
+    next(error);
   }
-);
+});
 
 // 10. DELETE a specific review for a product
 productsRouter.delete(
@@ -245,25 +235,19 @@ productsRouter.delete(
     try {
       const productID = req.params.productId;
       const reviewID = req.params.reviewId;
-      const reviewsArray = await getReviews();
-      const filteredReviewsArray = reviewsArray
-        .filter((review) => review.productId === productID)
-        .filter((review) => review._id !== reviewID);
-      if (
-        filteredReviewsArray.length !==
-        reviewsArray.filter((review) => review.productId === productID).length
-      ) {
-        await writeReviews(filteredReviewsArray);
-        res.status(204).send();
+      const updatedProduct = await ProductModel.findByIdAndUpdate(
+        productID,
+        { $pull: { reviews: { _id: reviewID } } },
+        { new: true }
+      );
+      if (updatedProduct) {
+        res.status(204).send(updatedProduct);
       } else {
-        next(
-          NotFound(
-            `Request could not be performed because of incorrect reviewId or productId`
-          )
-        );
+        next(NotFound(`Product with id ${productID} was not found`));
       }
     } catch (error) {
       console.log(error);
+      next(error);
     }
   }
 );

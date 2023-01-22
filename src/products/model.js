@@ -2,10 +2,13 @@ import mongoose from "mongoose";
 
 const { Schema, model } = mongoose;
 
-const ReviewSchema = new Schema({
-  comment: { type: String, required: true },
-  rate: { type: Number, max: 5, default: 1, required: true },
-});
+const ReviewSchema = new Schema(
+  {
+    comment: { type: String, required: true },
+    rate: { type: Number, max: 5, default: 1, required: true },
+  },
+  { timestamps: true }
+);
 
 const ProductModel = new Schema(
   {
