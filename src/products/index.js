@@ -64,7 +64,7 @@ productsRouter.get("/", async (req, res, next) => {
   try {
     const query = req.query.category;
     console.log(query);
-    const productsArray = await ProductModel.find();
+    const productsArray = await ProductModel.find().populate("reviews");
     if (!query) {
       res.send(productsArray);
     } else {
