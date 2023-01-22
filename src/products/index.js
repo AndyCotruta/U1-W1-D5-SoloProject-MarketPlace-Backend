@@ -14,6 +14,7 @@ import {
 import uniqid from "uniqid";
 import httpErrors from "http-errors";
 import ProductModel from "./model.js";
+import q2m from "query-to-mongo";
 
 const productsRouter = express.Router();
 
@@ -62,17 +63,17 @@ productsRouter.post("/", async (req, res, next) => {
 // 2. GET all products
 productsRouter.get("/", async (req, res, next) => {
   try {
-    const query = req.query.category;
-    console.log(query);
-    const productsArray = await ProductModel.find().populate("reviews");
-    if (!query) {
-      res.send(productsArray);
-    } else {
-      const searchedProducts = productsArray.filter(
-        (product) => product.category === query
-      );
-      res.send(searchedProducts);
-    }
+    const mongoQuery = q2m(req.query);
+
+    const { total, products } = await ProductModel.findProductsWithReviews(
+      mongoQuery
+    );
+    res.send({
+      links: mongoQuery.links("http://localhost:3001/products", total),
+      total,
+      totalPages: Math.ceil(total / mongoQuery.options.limit),
+      products,
+    });
   } catch (error) {
     console.log(error);
     next(error);
@@ -83,7 +84,9 @@ productsRouter.get("/", async (req, res, next) => {
 productsRouter.get("/:id", async (req, res, next) => {
   try {
     const productID = req.params.id;
-    const searchedProduct = await ProductModel.findById(productID);
+    const searchedProduct = await ProductModel.findById(productID).populate(
+      "reviews"
+    );
 
     if (searchedProduct) {
       res.send(searchedProduct);

@@ -10,7 +10,7 @@ const ReviewSchema = new Schema(
   { timestamps: true }
 );
 
-const ProductModel = new Schema(
+const ProductSchema = new Schema(
   {
     name: { type: String, required: true }, //REQUIRED
     description: { type: String, required: true }, //REQUIRED
@@ -23,4 +23,16 @@ const ProductModel = new Schema(
   { timestamps: true }
 );
 
-export default model("Product", ProductModel);
+ProductSchema.static("findProductsWithReviews", async function (query) {
+  const total = await this.countDocuments(query.criteria);
+
+  const products = await this.find(query.criteria, query.options.fields)
+    .skip(query.options.skip)
+    .limit(query.options.limit)
+    .sort(query.options.sort)
+    .populate("reviews");
+
+  return { total, products };
+});
+
+export default model("Product", ProductSchema);
